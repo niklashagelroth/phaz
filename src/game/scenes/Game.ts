@@ -112,13 +112,13 @@ export class Game extends Scene
 
         // Initiate player
 
-        const startPosition = {x: 0, y: 0}
+        const playerStartPosition = {x: 0, y: 0}
         const gameObjLayer = map.objects.find((v)=>v.name === 'GameObjects')
         if(gameObjLayer){
             const startObj = gameObjLayer.objects.find((v) => v.name === 'Start')
             if(startObj){
-                startPosition.x = startObj.x || 0
-                startPosition.y = startObj.y || 0
+                playerStartPosition.x = startObj.x || 0
+                playerStartPosition.y = startObj.y || 0
             }
             const finishObj = gameObjLayer.objects.find((v) => v.name === 'Finish')
             if(finishObj){
@@ -126,7 +126,7 @@ export class Game extends Scene
             }
         }
 
-        this.player.setXY(startPosition.x, startPosition.y)
+        this.player.setXY(playerStartPosition.x, playerStartPosition.y)
 
         this.player.create(
             floorLayer, 
