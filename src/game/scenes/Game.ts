@@ -1,17 +1,16 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { Player } from '../objects/player';
+import { Level } from '../objects/level';
 
 export class Game extends Scene
 {
     camera: Phaser.Cameras.Scene2D.Camera;
-    background: Phaser.GameObjects.Container;
-    clouds: Phaser.GameObjects.Container;
-    gameText: Phaser.GameObjects.Text;
 
-    music: Phaser.Sound.BaseSound
-
+    level: Level
     player: Player
+
+    timeInLevel: number = 0
 
     constructor ()
     {
@@ -20,39 +19,16 @@ export class Game extends Scene
 
     preload(){
 
-        this.load.image({
-            key: 'background',
-            url: 'assets/bgGame.jpg',
-        });
-        this.load.image({
-            key: 'cloud',
-            url: 'assets/cloud.png',
-        });
-        this.load.image({
-            key: 'ground',
-            url: 'assets/platforms.png',
-        });
-        this.load.image({
-            key: 'foundations',
-            url: 'assets/world_tileset.png',
-        });
-        this.load.audio('music', 'assets/time_for_adventure.mp3')
-        this.load.tilemapTiledJSON('tilemap', 'assets/my-world.json')
-
+        this.level = new Level(this)
         this.player = new Player(this)
     
     }
 
     timeText: Phaser.GameObjects.Text
 
-    finishLineX: number = 1000
-
     create ()
     {
-        // Music and camera
-
-        this.music = this.sound.add('music')
-        this.music.play()
+        // Camera
         
         this.camera = this.cameras.main;
         this.camera.flash(1000)
@@ -62,84 +38,30 @@ export class Game extends Scene
 
         this.timeText = this.add.text(10, 10, 'Time')
 
-        // Initiate map
+        // Initiate Level map etc
+        this.level.create()
 
-        const bg1 = this.add.image(0, 0, 'background').setScale(0.8, 0.8).setOrigin(0,0).setPosition(-150, -100).setTint(0x0, 0x0, 0xffffff, 0xffffff).setAlpha(0.5)
-        const bg2 = this.add.image(0, 0, 'background').setScale(0.8, 0.8).setOrigin(0,0).setPosition(650, -100).setTint(0x0, 0x0, 0xffffff, 0xffffff).setAlpha(0.5)
-        const bg3 = this.add.image(0, 0, 'background').setScale(0.8, 0.8).setOrigin(0,0).setPosition(1450, -100).setTint(0x0, 0x0, 0xffffff, 0xffffff).setAlpha(0.5)
-        this.background = this.add.container(0, 0, [bg1, bg2, bg3])
-
-        const tint = 500
-        this.tweens.add({
-            targets: bg1,
-            tint: tint,
-            ease: 'Power1',
-            duration: 4000,
-            repeat: -1
-        })
-        this.tweens.add({
-            targets: bg2,
-            tint: tint,
-            ease: 'Power1',
-            duration: 4000,
-            repeat: -1
-        })
-        this.tweens.add({
-            targets: bg3,
-            tint: tint,
-            ease: 'Power1',
-            duration: 4000,
-            repeat: -1
-        })
-
-        const clouds = [
-            this.add.image(0, 0, 'cloud').setScale(0.8, 0.8).setOrigin(0,0).setPosition(0, 50).setAlpha(0.8),
-            this.add.image(0, 0, 'cloud').setScale(0.4, 0.4).setOrigin(0,0).setPosition(400, 150).setAlpha(0.7).setTint(0x0, 0, 0xffffff),
-            this.add.image(0, 0, 'cloud').setScale(1, 1).setOrigin(0,0).setPosition(850, 0).setAlpha(0.9),
-        ]
-        this.clouds = this.add.container(0, 0, clouds)
-
-        const map = this.make.tilemap({ key: 'tilemap' })
-        map.addTilesetImage('foundations', 'foundations')
-        map.addTilesetImage('ground', 'ground')
-
-        map.createLayer('background', 'background')
-        const floorLayer = map.createLayer('floor', ['foundations', 'ground'])?.setCollisionByProperty({collides: true}).setCollisionCategory(1)
-        if(!floorLayer){
+        if(!this.level.map || !this.level.floor){
+            console.error('CANNOT LOAD GAME')
             return
         }
 
-
         // Initiate player
 
-        const playerStartPosition = {x: 0, y: 0}
-        const gameObjLayer = map.objects.find((v)=>v.name === 'GameObjects')
-        if(gameObjLayer){
-            const startObj = gameObjLayer.objects.find((v) => v.name === 'Start')
-            if(startObj){
-                playerStartPosition.x = startObj.x || 0
-                playerStartPosition.y = startObj.y || 0
-            }
-            const finishObj = gameObjLayer.objects.find((v) => v.name === 'Finish')
-            if(finishObj){
-                this.finishLineX = finishObj.x || 1000
-            }
-        }
-
-        this.player.setXY(playerStartPosition.x, playerStartPosition.y)
+        this.player.setXY(this.level.playerStartPosition.x, this.level.playerStartPosition.y)
 
         this.player.create(
-            floorLayer, 
+            this.level.floor, 
             (tile) => {
                 if(tile instanceof Phaser.Tilemaps.Tile && (tile.faceBottom)){
                     if(tile.alpha < 0.6)
-                        setTimeout(()=>map.removeTile(tile), 500)
+                        setTimeout(()=> this.level.map!.removeTile(tile), 500)
                     tile.alpha -= 0.02 
                 }
             },
             (tile) => {
                 if(tile instanceof Phaser.Tilemaps.Tile && tile.properties.mushroom){
-                    map.removeTile(tile)
+                    this.level.map!.removeTile(tile)
                     this.player.setBig()
                 }
             },
@@ -153,9 +75,9 @@ export class Game extends Scene
         
             if(this.player.y > 300)
                 this.changeScene()
-            this.background.setPosition(this.camera.scrollX * 0.7, -100)
-            this.clouds.setPosition(this.camera.scrollX * 0.5, -100)
-            if(this.player.x > this.finishLineX){
+            this.level.background.setPosition(this.camera.scrollX * 0.7, -100)
+            this.level.clouds.setPosition(this.camera.scrollX * 0.5, -100)
+            if(this.player.x > this.level.finishLineX){
                 this.levelCleared()
             }
         })
@@ -164,16 +86,20 @@ export class Game extends Scene
     }
 
     update(time: number, delta: number): void {
+        if(this.timeInLevel === 0) this.timeInLevel = time
         this.player.update(time, delta)
+        this.level.update(time, delta)
+        this.timeText.x = this.player.x
+        this.timeText.text = "Time: " + Math.round((time-this.timeInLevel)/1000)
     }
 
     changeScene ()
     {
-        this.music.stop()
+        this.level.stop()
         this.scene.start('GameOver');
     }
     levelCleared () {
-        this.music.stop()
+        this.level.stop()
         this.scene.start('LevelCleared');
     }
 }
