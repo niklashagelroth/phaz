@@ -1,4 +1,4 @@
-
+import { KEYBOARD } from "./keyboard"
 
 type PLAYER_EVENTS = 'died' | 'position'
 
@@ -14,8 +14,6 @@ export class Player {
   topVelocity = 400
 
   lastTimeOnFloor = 0
-
-  initialTime: number | undefined = undefined
 
 
   constructor(scene: Phaser.Scene){
@@ -37,6 +35,7 @@ export class Player {
   }
 
   setXY(x?: number, y?: number) {
+    console.log('Setting X Y', x, y)
     if(!this.body){
       this.initialPos.x = x || 0
       this.initialPos.y = y || 0
@@ -55,11 +54,7 @@ export class Player {
     return this.body?.body.y || 0
   }
 
-  create(
-    floorLayer: Phaser.Tilemaps.TilemapLayer, 
-    onGameObjectCollision: (obj: Phaser.Physics.Arcade.Body | Phaser.Tilemaps.Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody) => void,
-    onGameObjectOverlap: (obj: Phaser.Physics.Arcade.Body | Phaser.Tilemaps.Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody) => void,
-  ){
+  create(){
     this.scene.anims.create({
         key: 'idle',
         frames: this.scene.anims.generateFrameNumbers('knight', { start: 0, end: 3 }),
@@ -80,7 +75,7 @@ export class Player {
     });
     this.jumpSound = this.scene.sound.add('jumpSound')
 
-    this.body = this.scene.physics.add.sprite(this.initialPos.x, this.initialPos.y, 'knight').setBodySize(12, 23, true)
+    this.body = this.scene.physics.add.sprite(this.initialPos.x, this.initialPos.y, 'knight').setBodySize(12, 22, true)
 
     this.body.anims.play('run', true)
 
@@ -88,14 +83,6 @@ export class Player {
     this.body.setDragX(500)
     this.body.setFrictionX(0.1)
     this.body.setMaxVelocity(this.topVelocity, 1000)
-
-    this.scene.physics.add.collider(this.body, floorLayer, (bod, obj)=>{
-        onGameObjectCollision(obj)
-    })
-
-    this.scene.physics.add.overlap(this.body, floorLayer, (bod, obj) => {
-        onGameObjectOverlap(obj)
-    })
     
   }
 
@@ -109,25 +96,11 @@ export class Player {
     })
   }
 
-  lastPosition: {x: number, y: number} = {x:0, y:0}
-
-  update(time: number, delta: number){
-
-    if(this.initialTime === undefined){
-        this.initialTime = time
-    }
+  animateGraphics(){
     if(!this.body)
       return
-
-    if(this.body.body.x !== this.lastPosition.x || this.body.body.y !== this.lastPosition.y) {
-      this.notifyListeners('position')
-    }
-    this.lastPosition.x = this.body.body.x
-    this.lastPosition.y = this.body.body.y
-
-
     if(!this.body.body.onFloor()){
-        this.body.anims.play('roll', true)
+      this.body.anims.play('roll', true)
     } else {
         if(this.body.body.velocity.x > 100 || this.body.body.velocity.x < -100){
             this.body.anims.play('run', true)
@@ -135,25 +108,32 @@ export class Player {
             this.body.anims.play('idle', true)
         }
     }
+    if(this.body.body.acceleration.x>0){
+      this.body.flipX = false
+    } else if(this.body.body.acceleration.x<0){
+      this.body.flipX = true
+    }
+  }
 
-    if (Phaser.Input.Keyboard.JustDown(this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT) )){
-        if(this.body.body.velocity.x > 0)
-            this.body.body.setVelocityX(Math.max(this.body.body.velocity.x - 200, 0))
+  handleKeyboard(time: number){
+    if(!this.body)
+      return
+    if (KEYBOARD.justPressed('left')/*Phaser.Input.Keyboard.JustDown(this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT) )*/){
+      if(this.body.body.velocity.x > 0)
+          this.body.body.setVelocityX(Math.max(this.body.body.velocity.x - 200, 0))
     } 
-    if (Phaser.Input.Keyboard.JustDown(this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT) )){
-        if(this.body.body.velocity.x < 0)
-            this.body.body.setVelocityX(Math.min(this.body.body.velocity.x + 200, 0))
+    if (KEYBOARD.justPressed('right')/*Phaser.Input.Keyboard.JustDown(this.scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT) )*/){
+      if(this.body.body.velocity.x < 0)
+          this.body.body.setVelocityX(Math.min(this.body.body.velocity.x + 200, 0))
     }
     
-    const leftDur = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).getDuration()
+    const leftDur = KEYBOARD.pressDuration('left')//this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).getDuration()
     if (leftDur) {
         this.body.body.setAccelerationX(-500)
-        this.body.flipX = true
     }
-    const rightDur = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).getDuration()
+    const rightDur = KEYBOARD.pressDuration('right') //this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).getDuration()
     if (rightDur) {
         this.body.body.setAccelerationX(500)
-        this.body.flipX = false
     }
     if(leftDur === rightDur){
         this.body.body.setAccelerationX(0)
@@ -172,7 +152,31 @@ export class Player {
     }
   }
 
+  handleListeners(){
+    if(!this.body)
+      return
+    if(this.body.body.x !== this.lastPosition.x || this.body.body.y !== this.lastPosition.y) {
+      this.notifyListeners('position')
+    }
+    this.lastPosition.x = this.body.body.x
+    this.lastPosition.y = this.body.body.y
+  }
+
+  lastPosition: {x: number, y: number} = {x:0, y:0}
+
+  update(time: number, delta: number){
+    this.handleKeyboard(time)
+    this.animateGraphics()
+    this.handleListeners()
+  }
+
   setBig(){
     this.body?.setScale(1.5)
+  }
+
+  hit(){
+    if(this.body?.scale === 1.5){
+      this.body.setScale(1)
+    }
   }
 }
